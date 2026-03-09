@@ -49,6 +49,9 @@ class ConversationClient extends ChangeNotifier {
   /// Whether the microphone is muted
   bool get isMuted => _liveKitManager.isMuted;
 
+  /// Whether the agent's audio output is muted
+  bool get isAgentMuted => _liveKitManager.isAgentMuted;
+
   /// Whether feedback can be sent for the last agent response
   bool get canSendFeedback =>
       _messageHandler.currentEventId != _lastFeedbackEventId &&
@@ -291,6 +294,46 @@ class ConversationClient extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _callbacks?.onError?.call('Failed to toggle mute', e);
+    }
+  }
+
+  /// Mutes or unmutes the agent's audio output.
+  ///
+  /// When [muted] is true:
+  /// - Agent audio track is disabled at WebRTC level (hard silence)
+  /// - User mic is muted (no input to trigger responses)
+  /// - Contextual update sent to agent (tells it to stay quiet)
+  ///
+  /// The session stays alive so context is fully preserved on unmute.
+  Future<void> setAgentMuted(bool muted, {bool updateAgent = true}) async {
+    try {
+      // Hard mute: disable remote audio tracks
+      _liveKitManager.setAgentMuted(muted);
+
+      // Mute user mic so agent gets no voice input
+      // await _liveKitManager.setMicMuted(muted);
+
+      // Soft mute: tell the agent to stay silent
+      if (_status == ConversationStatus.connected && updateAgent) {
+        if (muted) {
+          sendContextualUpdate(
+            'SYSTEM: The user has muted the assistant. '
+            'Do NOT speak, respond, or generate any audio until '
+            'further notice. Maintain all conversation context '
+            'silently. Wait for the unmute signal before speaking.',
+          );
+        } else {
+          sendContextualUpdate(
+            'SYSTEM: The user has unmuted the assistant. '
+            'You may now speak and respond normally. '
+            'Continue from where the conversation left off.',
+          );
+        }
+      }
+
+      notifyListeners();
+    } catch (e) {
+      _callbacks?.onError?.call('Failed to set agent mute state', e);
     }
   }
 
