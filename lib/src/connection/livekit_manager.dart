@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:livekit_client/livekit_client.dart';
 
 /// Manages LiveKit Room connection and audio tracks
@@ -55,37 +54,8 @@ class LiveKitManager {
   /// Connects to a LiveKit server
   Future<void> connect(String serverUrl, String token) async {
     try {
-      // #region agent log
-      try {
-        File('/tmp/debug-5ce980.log').writeAsStringSync(
-            '${jsonEncode({
-                  "sessionId": "5ce980",
-                  "hypothesisId": "A",
-                  "location": "livekit_manager.dart:connect",
-                  "message": "connect started",
-                  "data": {"_agentMutedAtConnectStart": _agentMuted},
-                  "timestamp": DateTime.now().millisecondsSinceEpoch
-                })}\n',
-            mode: FileMode.append);
-      } catch (_) {}
-      // #endregion
       // Clean up any existing connection
       await disconnect();
-
-      // #region agent log
-      try {
-        File('/tmp/debug-5ce980.log').writeAsStringSync(
-            '${jsonEncode({
-                  "sessionId": "5ce980",
-                  "hypothesisId": "A",
-                  "location": "livekit_manager.dart:connect",
-                  "message": "after disconnect, before new room",
-                  "data": {"_agentMutedAfterDisconnect": _agentMuted},
-                  "timestamp": DateTime.now().millisecondsSinceEpoch
-                })}\n',
-            mode: FileMode.append);
-      } catch (_) {}
-      // #endregion
 
       const roomOptions = RoomOptions(
         defaultAudioPublishOptions: AudioPublishOptions(
@@ -156,25 +126,6 @@ class LiveKitManager {
           _handleSpeakingStateChange(agentIsSpeaking);
         })
         ..on<TrackSubscribedEvent>((event) {
-          // #region agent log
-          try {
-            File('/tmp/debug-5ce980.log').writeAsStringSync(
-                '${jsonEncode({
-                      "sessionId": "5ce980",
-                      "hypothesisId": "A",
-                      "location": "livekit_manager.dart:TrackSubscribedEvent",
-                      "message": "Track subscribed",
-                      "data": {
-                        "_agentMuted": _agentMuted,
-                        "isAudioTrack": event.track is AudioTrack,
-                        "willDisableTrack":
-                            _agentMuted && event.track is AudioTrack
-                      },
-                      "timestamp": DateTime.now().millisecondsSinceEpoch
-                    })}\n',
-                mode: FileMode.append);
-          } catch (_) {}
-          // #endregion
           // If agent is muted, disable any newly subscribed audio tracks
           if (_agentMuted && event.track is AudioTrack) {
             event.track.mediaStreamTrack.enabled = false;
@@ -194,6 +145,9 @@ class LiveKitManager {
       }
 
       // Enable microphone (LiveKit handles track creation automatically)
+      // On first session this triggers the OS permission dialog, which
+      // deactivates the iOS audio session. We must re-call startAudio()
+      // after this completes to restore audio playback.
       await _room!.localParticipant?.setMicrophoneEnabled(
         true,
         audioCaptureOptions: const AudioCaptureOptions(
@@ -202,6 +156,13 @@ class LiveKitManager {
           autoGainControl: true,
         ),
       );
+
+      // Re-activate audio playback after mic permission is granted.
+      // The OS permission dialog (first session only) deactivates the
+      // audio session, and AudioPlaybackStatusChanged won't re-fire.
+      try {
+        await _room!.startAudio();
+      } catch (_) {}
 
       // Emit room ready event - connection is fully established and ready for messages
       _roomReadyController.add(null);
@@ -246,20 +207,6 @@ class LiveKitManager {
   /// Disables remote audio tracks so the user hears nothing from the agent,
   /// while keeping the session alive to preserve conversation context.
   void setAgentMuted(bool muted) {
-    // #region agent log
-    try {
-      File('/tmp/debug-5ce980.log').writeAsStringSync(
-          '${jsonEncode({
-                "sessionId": "5ce980",
-                "hypothesisId": "B",
-                "location": "livekit_manager.dart:setAgentMuted",
-                "message": "setAgentMuted called",
-                "data": {"muted": muted, "prevAgentMuted": _agentMuted},
-                "timestamp": DateTime.now().millisecondsSinceEpoch
-              })}\n',
-          mode: FileMode.append);
-    } catch (_) {}
-    // #endregion
     _agentMuted = muted;
 
     if (_room == null) return;
@@ -299,25 +246,11 @@ class LiveKitManager {
 
   /// Disconnects from the LiveKit server and cleans up resources
   Future<void> disconnect() async {
-    // #region agent log
-    try {
-      File('/tmp/debug-5ce980.log').writeAsStringSync(
-          '${jsonEncode({
-                "sessionId": "5ce980",
-                "hypothesisId": "D",
-                "location": "livekit_manager.dart:disconnect",
-                "message": "disconnect called",
-                "data": {"_agentMutedBeforeReset": _agentMuted},
-                "timestamp": DateTime.now().millisecondsSinceEpoch
-              })}\n',
-          mode: FileMode.append);
-    } catch (_) {}
-    // #endregion
     // Cancel any pending debounce timer
     _speakingDebounceTimer?.cancel();
     _speakingDebounceTimer = null;
     _lastSpeakingState = false;
-    _agentMuted = false; // Reset so new sessions start with audio enabled
+    _agentMuted = false;
 
     // Dispose of event listener first
     await _eventsListener?.dispose();
