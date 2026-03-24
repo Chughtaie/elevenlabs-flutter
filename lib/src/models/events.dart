@@ -220,6 +220,41 @@ class McpIntegration {
   }
 }
 
+/// Audio alignment data with character-level timing.
+class AudioAlignmentData {
+  /// Event ID this alignment belongs to.
+  final int eventId;
+
+  /// Individual characters in this alignment chunk.
+  final List<String> chars;
+
+  /// Start time in ms for each character (relative to this chunk).
+  final List<int> charStartTimesMs;
+
+  /// Duration in ms for each character.
+  final List<int> charDurationsMs;
+
+  AudioAlignmentData({
+    required this.eventId,
+    required this.chars,
+    required this.charStartTimesMs,
+    required this.charDurationsMs,
+  });
+
+  factory AudioAlignmentData.fromJson(Map<String, dynamic> json) {
+    final audioEvent = json['audio_event'] as Map<String, dynamic>;
+    final alignment = audioEvent['alignment'] as Map<String, dynamic>;
+    return AudioAlignmentData(
+      eventId: audioEvent['event_id'] as int,
+      chars: (alignment['chars'] as List).cast<String>(),
+      charStartTimesMs:
+          (alignment['char_start_times_ms'] as List).cast<int>(),
+      charDurationsMs:
+          (alignment['char_durations_ms'] as List).cast<int>(),
+    );
+  }
+}
+
 /// Agent tool response
 class AgentToolResponse {
   /// Tool name

@@ -91,6 +91,7 @@ class ConversationClient extends ChangeNotifier {
       onMessage: callbacks?.onMessage,
       onModeChange: callbacks?.onModeChange,
       onAudio: callbacks?.onAudio,
+      onAudioAlignment: callbacks?.onAudioAlignment,
       onVadScore: callbacks?.onVadScore,
       onInterruption: callbacks?.onInterruption,
       onAgentChatResponsePart: callbacks?.onAgentChatResponsePart,
